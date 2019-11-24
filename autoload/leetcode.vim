@@ -552,6 +552,7 @@ function! s:HandleProblemListCR() abort
         endif
 
         execute 'rightbelow vnew ' . problem_file_name
+        only
         call leetcode#ResetSolution(1)
     endif
 endfunction
@@ -741,10 +742,11 @@ function! leetcode#ResetSolution(with_latest_submission) abort
     call append('$', code)
 
     silent! normal! ggdd
+    execute ':5,$g/^\ \*\ $/d'
 endfunction
 
 function! s:CommentStart(filetype, title) abort
-    if index(['java', 'c', 'javascript', 'cpp', 'csharp', 'swift', 'scala',
+    if index(['java', 'c', 'javascript', 'cpp', 'c', 'csharp', 'swift', 'scala',
                 \ 'kotlin', 'rust'], a:filetype) >= 0
         return '/* ' . a:title
     elseif index(['python', 'python3', 'ruby'], a:filetype) >= 0
@@ -757,7 +759,7 @@ function! s:CommentStart(filetype, title) abort
 endfunction
 
 function! s:CommentLine(filetype, line) abort
-    if index(['java', 'c', 'javascript', 'cpp', 'csharp', 'swift', 'scala',
+    if index(['java', 'c', 'javascript', 'cpp', 'c', 'csharp', 'swift', 'scala',
                 \ 'kotlin', 'rust'], a:filetype) >= 0
         return ' * ' . a:line
     elseif index(['python', 'python3', 'ruby'], a:filetype) >= 0
@@ -770,7 +772,7 @@ function! s:CommentLine(filetype, line) abort
 endfunction
 
 function! s:CommentEnd(filetype) abort
-    if index(['java', 'c', 'javascript', 'cpp', 'csharp', 'swift', 'scala',
+    if index(['java', 'c', 'javascript', 'cpp', 'c', 'csharp', 'swift', 'scala',
                 \ 'kotlin', 'rust'], a:filetype) >= 0
         return ' * [End of Description] */'
     elseif index(['python', 'python3', 'ruby'], a:filetype) >= 0
@@ -986,14 +988,9 @@ endfunction
 
 function! s:FormatResult(result_) abort
     let result = a:result_
-    let output = ['# ' . result['title'],
-                \ '',
-                \ '## State',
-                \ '  - ' . result['state'],
-                \ '',
-                \ '## Runtime',
-                \ '  - ' . result['runtime'],
-                \ '']
+    let output = [ '# '.result['title'],
+                \ '## State: '.result['state'],
+                \ '## Runtime: '. result['runtime']]
     if string(result['runtime_percentile'])
         let message = printf('  - Faster than %s%% submissions',
                     \ result['runtime_percentile'])
@@ -1018,10 +1015,7 @@ function! s:FormatResult(result_) abort
     call extend(output, s:FormatSection('Error', result['error'], 2))
     call extend(output, s:FormatSection('Standard Output', result['stdout'], 2))
 
-    call extend(output, s:FormatSection('Input', result['testcase'], 3))
-    call extend(output, s:FormatSection('Actual Answer', result['answer'], 3))
-    call extend(output, s:FormatSection('Expected Answer',
-                \ result['expected_answer'], 3))
+    call extend(output, s:FormatSection('Answer', result['answer'], 3))
     return output
 endfunction
 
@@ -1055,6 +1049,7 @@ function! s:ShowRunResultInPreview(result) abort
     syn keyword lcAccepted Accepted
     syn keyword lcAccepted Finished
     syn match lcFailure /Wrong Answer/
+    syn match lcFailure /Wrong/
     syn match lcFailure /Memory Limit Exceeded/
     syn match lcFailure /Output Limit Exceeded/
     syn match lcFailure /Time Limit Exceeded/
@@ -1071,6 +1066,7 @@ function! s:ShowRunResultInPreview(result) abort
     hi! lcFailure term=bold gui=bold ctermfg=red guifg=red
     hi! link lcOK lcAccepted
     hi! link lcWarning lcFailure
+    resize 7
 
     execute saved_winnr . 'wincmd w'
     call s:UpdateSubmitState(a:result)

@@ -256,12 +256,39 @@ def _split(s):
     return s.split('\n')
 
 
-def _check_result(submission_id):
+def _check_result(submission_id, expected_id=None, testinput=None):
     global task_progress
     if _in_task():
         prog_stage = 'Uploading '
         prog_bar = '.'
         task_progress = prog_stage + prog_bar
+
+    r2 = dict()
+    while expected_id:
+        headers = _make_headers()
+        url = LC_CHECK.format(submission=expected_id)
+        log.info('check result request: url="%s" headers="%s"', url, headers)
+        res = session.get(url, headers=headers)
+        log.info('check result response: status="%s" body="%s"', res.status_code, res.text)
+        if res.status_code != 200:
+            _echoerr('cannot get the execution result')
+            return None
+        if _in_task():
+            prog_bar += '.'
+
+        r2 = res.json()
+        if r2['state'] == 'SUCCESS':
+            prog_stage = 'Done      '
+            break
+        elif r2['state'] == 'PENDING':
+            prog_stage = 'Pending   '
+        elif r2['state'] == 'STARTED':
+            prog_stage = 'Running   '
+        if _in_task():
+            task_progress = prog_stage + prog_bar
+
+        time.sleep(1)
+
 
     while True:
         headers = _make_headers()
@@ -289,7 +316,7 @@ def _check_result(submission_id):
         time.sleep(1)
 
     result = {
-        'answer': r.get('code_answer', []),
+        # 'expected_answer': r2.get('code_answer', []),
         'runtime': r['status_runtime'],
         'state': _status_to_name(r['status_code']),
         'testcase': _split(r.get('input', r.get('last_testcase', ''))),
@@ -298,6 +325,19 @@ def _check_result(submission_id):
         'error': [v for k, v in r.items() if 'error' in k and v]
     }
 
+    answer = r.get('code_answer',[]) 
+    expect_answer = r2.get('code_answer',[]) 
+    union_answer = []
+    for i in range(len(testinput)):
+        if answer[i] != expect_answer[i]:
+            union_answer.append('[%d] Input: %s'%(i+1,testinput[i]))
+            union_answer.append('    Output: %s <<<Wrong'%(answer[i]))
+            union_answer.append('    Output: %s <<<Right'%(expect_answer[i]))
+        else:
+            union_answer.append('[%d] Input: %s Output:%s'%(i+1,testinput[i],answer[i]))
+
+
+    result['answer'] = union_answer
     # the keys differs between the result of testing the code and submitting it
     # for submission judge_type is 'large', and for testing judge_type does not exist
     if r.get('judge_type') == 'large':
@@ -310,9 +350,9 @@ def _check_result(submission_id):
         if result['state'] == 'Accepted':
             result['state'] = 'Finished'
         result['stdout'] = r.get('code_output', [])
-        result['expected_answer'] = []
         result['runtime_percentile'] = r.get('runtime_percentile', '')
-        result['expected_answer'] = r.get('expected_code_answer', [])
+        # result['expected_answer'] = r.get('expected_code_answer', [])
+        result['expected_answer'] = r2.get('code_output', [])
     return result
 
 
@@ -339,7 +379,7 @@ def test_solution(problem_id, title, slug, filetype, code, test_input):
             _echoerr('cannot test the solution for ' + slug)
         return None
 
-    result = _check_result(res.json()['interpret_id'])
+    result = _check_result(res.json()['interpret_id'],res.json()['interpret_expected_id'],test_input.split('\n'))
     result['testcase'] = test_input.split('\n')
     result['title'] = title
     return result
